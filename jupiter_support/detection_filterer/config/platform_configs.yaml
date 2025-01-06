@@ -1,0 +1,33 @@
+# Platform-specific configs for the frame_transform_provider
+
+default: &default_params
+    vehicle_frame_id: "vehicle_starfire_projection"
+    articulation_hitch_front_frame_id: "not_applicable"
+    articulation_hitch_rear_frame_id: "not_applicable"
+    implement_frame_id: "implement_starfire"
+    implement_hitch_frame_id: "implement_hitch"
+    has_8_degree_camera_pitch_modifier_brackets: false
+    use_implement_angle_message: true
+
+loamy:
+    <<: *default_params
+    has_8_degree_camera_pitch_modifier_brackets: true
+    use_implement_angle_message: false
+
+bedrock:
+    <<: *default_params
+    articulation_hitch_front_frame_id: "vehicle_articulation_joint_front"
+    articulation_hitch_rear_frame_id: "vehicle_articulation_joint_rear"
+    use_implement_angle_message: false
+
+clay:
+    <<: *default_params
+
+int:
+    <<: *default_params
+
+hitchhiker:
+    <<: *default_params
+
+virtual:
+    <<: *default_params

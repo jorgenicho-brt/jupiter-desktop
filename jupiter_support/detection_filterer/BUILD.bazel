@@ -1,0 +1,25 @@
+load("//autonomy/jupiter/robotics/jupiter-desktop/tools/ros2:ros2_launch.bzl", "ros2_launch")
+
+ros2_launch(
+    name = "detetion_filterer_launch",
+    data = [
+        #":launch/halo_cameras.yaml",
+        #":config/platform_configs.yaml",
+        "//autonomy/adk/common/rti:adk_qos_profiles",
+        "//autonomy/jupiter/robotics/JupiterEmbedded/src/frame_transform_provider:frame_transform_config_files",
+    ],
+    env = {
+        "NDDS_QOS_PROFILES": "$(location //autonomy/adk/common/rti:adk_qos_profiles)",
+        "SYSTEM_UNIQUE_ID": "1",
+        "ROS_DOMAIN_ID": "11",
+    },
+    launch_file = "detection_filterer.launch.py",
+    nodes = [
+        "//autonomy/jupiter/robotics/halo/detection_filterer:detection_filterer_with_trusted_vehicle",
+        "//autonomy/jupiter/robotics/halo/detection_filterer:cuboid_to_markers_converter",
+        "//autonomy/jupiter/robotics/halo/detection_filterer:synthetic_detection_generator_node",
+    ],
+    deps = [
+        #"//autonomy/jupiter/robotics/JupiterEmbedded/src/launch_utils:launch_utils_pkg",
+    ],
+)
