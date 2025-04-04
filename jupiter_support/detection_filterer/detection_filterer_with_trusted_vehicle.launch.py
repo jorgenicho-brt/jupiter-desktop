@@ -1,22 +1,17 @@
 import os
 from pathlib import Path
 from os import getenv
-from typing import Any
-
 import yaml
 
 import launch
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
-from launch.actions import GroupAction, LogInfo, TimerAction, SetEnvironmentVariable
+from launch.actions import GroupAction, SetEnvironmentVariable
 from launch_ros.actions import Node
 
-#sys.path.append(str(CURRENT_PATH / Path('autonomy/jupiter/robotics/JupiterEmbedded/src/launch_utils')))
-from launch_utils.config_utils import is_vehicle_articulated, load_yaml_config, load_implement_config
 CURRENT_PATH = Path(os.getcwd())
 PACKAGE_PATH = CURRENT_PATH / Path('autonomy/jupiter/robotics/jupiter-desktop/jupiter_support/detection_filterer')
 DETECTION_FILTERER_PATH = Path('autonomy/jupiter/robotics/halo/detection_filterer')
-JUPITER_CONFIG_PATH = Path('autonomy/jupiter/robotics/JupiterEmbedded/jupiter_config')
 
 # getenv returns None if not set
 PROGRAM = getenv("PROGRAM", "jupiter")
@@ -48,51 +43,33 @@ platform_configs = load_yaml_config(
     yaml_path= str(CURRENT_PATH / Path('autonomy/jupiter/robotics/JupiterEmbedded/src/frame_transform_provider/config/platform_configs.yaml')),
     system_key=SYSTEM)
 
-def resolve_hitch_params(implement_id: str,
-                         implement_configs_file: str,
-                         default_hitch_params: dict = {}) -> dict[Any, Any] | None | Any:
-    implement_params = None
-    if not Path(implement_configs_file).exists():
-        raise Exception(f"Implement config file {implement_configs_file} does not exist")
+def create_trusted_vehicle_parameters(vehicle_name: str, extension_distances: [1.0, 1.0, 1.0, 1.0]):
+    return {
+        'frame_id' : f'{vehicle_name}_footprint',
+        'footprint_frame_ids' : {
+            'front_left' : f'{vehicle_name}_footprint_front_left_corner',
+            'front_right' : f'{vehicle_name}_footprint_front_right_corner',
+            'rear_left' : f'{vehicle_name}_footprint_rear_left_corner',
+            'rear_right' : f'{vehicle_name}_footprint_rear_right_corner'
+        },
+        'extension_distances' :{
+            'forward' : extension_distances[0],
+            'backward' : extension_distances[1],
+            'left' : extension_distances[2],
+            'right' : extension_distances[3]
+        },
+    }
 
-    with open(implement_configs_file, "r") as imp_conf_file:
-        implement_params = yaml.safe_load(imp_conf_file)
-
-    hitch_params = default_hitch_params
-    if implement_params is None:
-        return hitch_params
-
-    if implement_id in implement_params:
-        hitch_params = implement_params[implement_id]
-
-    return hitch_params
-
-hitch_params = resolve_hitch_params(implement_id = '1775NT_60',
-                                    implement_configs_file = str(CURRENT_PATH / JUPITER_CONFIG_PATH / 'config/implements.yaml'),
-                                    default_hitch_params = {'hitch_mask' :
-                                        {
-                                            'masks' : ['mask1', 'mask2'],
-                                            'mask1': {
-                                                "enabled": True,
-                                                "length": 0.8,
-                                                "width": 2.0,
-                                                "offset_from_implement": [0.0, 0.0]
-                                            },
-                                            'mask2': {
-                                                "enabled": True,
-                                                "length": 1.5,
-                                                "width": 1.0,
-                                                "offset_from_implement": [0.0, 0.0]
-                                            }
-                                        }
-                                    }
-                                )
 
 detection_filterer_parameters = {
+    "trusted_vehicles" : ['combine01', 'combine02'],
+    'combine01' : create_trusted_vehicle_parameters('combine01', [1.0, 1.0, 1.0, 1.0]),
+    'combine02' : create_trusted_vehicle_parameters('combine02', [1.0, 1.0, 1.0, 1.0]),
     "camera_names": [
         'mockup_camera1', # Uncomment this to get implement detections, currently detection filterer does not seem to handle multiple topics
         'mockup_camera2',
         'mockup_camera3',
+        #'mockup_camera3'
         #"T01_T03",
         # "T02_T03",
         # "T02_T04",
@@ -118,19 +95,15 @@ detection_filterer_parameters = {
     "implement_frame_id": platform_configs["implement_frame_id"],
     "publish_visualization": True,
     "vehicle_frame_id": platform_configs["vehicle_frame_id"],
-    **hitch_params
 }
-
-# if hitch_params is not None:
-#     detection_filterer_parameters['hitch_mask'] = hitch_params
 
 def launch_detection_generator(vehicle_name: str,
                                detections_out_topic : str,
                                detection_generator_params_dict : dict =
     {'detection_size' : [0.2, 0.2, 0.2],
     'publish_rate': 0.5,
-    'msg_queue_size': 4},
-    launch_delay: float = 1.0):
+    'msg_queue_size': 4}
+                               ):
     launch_entities = []
 
     # Detection generator node
@@ -152,9 +125,7 @@ def launch_detection_generator(vehicle_name: str,
             node_params_dict
         ]
     )
-
-    #launch_entities.append(detection_generator_node)
-    launch_entities.append(TimerAction(period = launch_delay, actions = [detection_generator_node]))
+    launch_entities.append(detection_generator_node)
     return GroupAction(
         actions = launch_entities
     )
@@ -173,6 +144,7 @@ def launch_cuboid_to_markers_converter(camera_name: str):
         ],
         remappings = [
             ('detections', '{0}/filtered_localized_detections'.format(camera_name)), # input jupiter_detection_msgs::msg::CuboidArray> message
+            #('detections', '{0}/filtered_trusted_vehicle_detections'.format(camera_name)),
             ('detections_markers', 'viz/{0}_filtered_trusted_vehicle_detections'.format(camera_name)) # output visualization_msgs::msg::MarkerArray message
         ]
     )
@@ -182,11 +154,10 @@ def generate_launch_description():
 
     ld = launch.LaunchDescription(
         [
-            LogInfo(msg='Running Detection Filterer setup, current path: {0}'.format(CURRENT_PATH)),
             DeclareLaunchArgument(name='env_ros_domain_id', default_value = '11'),
             SetEnvironmentVariable(name='ROS_DOMAIN_ID', value=LaunchConfiguration('env_ros_domain_id')),
             Node(
-                executable=str(DETECTION_FILTERER_PATH / Path('detection_filterer')),
+                executable=str(DETECTION_FILTERER_PATH / Path('detection_filterer_with_trusted_vehicle')),
                 output="screen",
                 name="detection_filterer",
                 arguments = '--dds_domain_id 11'.split(),
