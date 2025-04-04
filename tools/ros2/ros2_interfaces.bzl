@@ -1,5 +1,5 @@
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@ros2//:build_defs.bzl", "if_ros2_foxy")
+load("@ros2//:build_defs.bzl", "if_ros2_version")
 load("//tools/private:cc_helper.bzl", "compile_cc_generated_code", "get_hdrs", "get_srcs")
 load(
     "//tools/private:ros2_providers.bzl",
@@ -121,7 +121,7 @@ def _c_generator_aspect_impl(target, ctx):
         ctx.executable._typesupport_generator,
         ctx.attr._typesupport_templates,
         _TYPESUPPORT_GENERATOR_C_OUTPUT_MAPPING,
-        visibility_control_template = if_ros2_foxy(ctx.file._typesupport_visibility_control, None),
+        visibility_control_template = if_ros2_version(ctx.file._typesupport_visibility_control, None),
         extra_generator_args = [
             "--typesupports=rosidl_typesupport_fastrtps_c",
             "--typesupports=rosidl_typesupport_introspection_c",
